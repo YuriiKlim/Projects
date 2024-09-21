@@ -9,7 +9,6 @@ import torch.nn.functional as F
 from torchvision import transforms, models
 import cv2
 from ultralytics import YOLO
-#from SegCloth import segment_clothing
 import numpy as np
 from transformers import pipeline
 
@@ -17,31 +16,24 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 segmenter = pipeline(model="mattmdjaga/segformer_b2_clothes")
 
 def segment_clothing(img, clothes=["Hat", "Upper-clothes", "Skirt", "Pants", "Dress", "Belt", "Left-shoe", "Right-shoe", "Scarf"]):
-    # Segment image
     segments = segmenter(img)
 
-    # Create list of masks
     mask_list = []
     for s in segments:
         if s['label'] in clothes:
             mask_list.append(s['mask'])
 
-    # Paste all masks on top of each other
     final_mask = np.array(mask_list[0])
     for mask in mask_list:
         current_mask = np.array(mask)
         final_mask = final_mask + current_mask
 
-    # Convert final mask from np array to PIL image
     final_mask = Image.fromarray(final_mask)
 
-    # Apply mask to original image
     img.putalpha(final_mask)
 
-    # Create a white background image
     white_bg = Image.new("RGB", img.size, (255, 255, 255))
 
-    # Composite the original image onto the white background
     final_img = Image.alpha_composite(white_bg.convert("RGBA"), img)
 
     return final_img.convert("RGB")
@@ -69,14 +61,6 @@ class TransferLearningClassifier(nn.Module):
         out = self.dropout2(out)
         out = self.fc3(out)
         return out
-
-
-class_dict = {'Dress': 0, 'Football Boots': 1, 'Football Sneakers': 2, 'Full-zip Hoodie': 3, 'Hoodie': 4,
-              'Jacket': 5, 'Leggings': 6, 'Longsleeve': 7, 'Pants': 8, 'Parka': 9, 'Polo': 10, 'Puffer jacket': 11,
-              'Shirt': 12, 'Shorts': 13, 'Skirt': 14, 'Slippers': 15, 'Sneakers': 16, 'Sweater': 17,
-              'Sweatshirt': 18, 'T-shirt': 19, 'Tank Top': 20, 'Top': 21, 'Track Jacket': 22, 'Vest': 23}
-
-inverse_class_dict = {v: k for k, v in class_dict.items()}
 
 
 class PhotoProcessing1:
@@ -193,37 +177,79 @@ class App:
         self.processor = None
         self.image = None
 
-        # Select Model Button
+        self.class_dict = {'Dress': 0, 'Football Boots': 1, 'Football Sneakers': 2, 'Full-zip Hoodie': 3, 'Hoodie': 4,
+                           'Jacket': 5, 'Leggings': 6, 'Longsleeve': 7, 'Pants': 8, 'Parka': 9, 'Polo': 10, 'Puffer jacket': 11,
+                           'Shirt': 12, 'Shorts': 13, 'Skirt': 14, 'Slippers': 15, 'Sneakers': 16, 'Sweater': 17,
+                           'Sweatshirt': 18, 'T-shirt': 19, 'Tank Top': 20, 'Top': 21, 'Track Jacket': 22, 'Vest': 23}
+        self.inverse_class_dict = {v: k for k, v in self.class_dict.items()}
+
         self.model_button = tk.Button(root, text="Select Model", command=self.load_model)
         self.model_button.grid(row=0, column=0, padx=10, pady=10)
 
-        # Image URL Entry
         self.url_label = tk.Label(root, text="Image URL:")
         self.url_label.grid(row=1, column=0, padx=10, pady=5)
         self.url_entry = tk.Entry(root, width=110)
         self.url_entry.grid(row=1, column=1, padx=10, pady=5)
         self.url_entry.bind("<KeyRelease>", self.check_predict_ready)
 
-        # Select Image Button
         self.image_button = tk.Button(root, text="Select Image", command=self.load_image)
         self.image_button.grid(row=2, column=0, padx=10, pady=10)
 
-        # Predict Button
         self.predict_button = tk.Button(root, text="Predict", command=self.predict, state=tk.DISABLED)
         self.predict_button.grid(row=3, column=0, columnspan=3, padx=10, pady=10)
 
-        # Clear Image Button
         self.clear_button = tk.Button(root, text="Clear Image", command=self.clear_image)
         self.clear_button.grid(row=4, column=0, columnspan=3, padx=10, pady=10)
 
-        # Output Area
         self.output_text = tk.Text(root, height=7, width=97)
         self.output_text.grid(row=5, column=0, columnspan=3, padx=10, pady=10)
 
     def load_model(self):
         model_path = filedialog.askopenfilename(title="Select Model File", filetypes=[("Model Files", "*.pth")])
         if model_path:
-            self.model = TransferLearningClassifier(num_classes=len(class_dict))
+            import os
+            model_filename = os.path.basename(model_path)
+            if model_filename == 'model_90k_v0.1.pth':
+                # Update class_dict with the new one
+                self.class_dict = {
+                    'Boots': 0,
+                    'Dress': 1,
+                    'Football boots': 2,
+                    'Football sneakers': 3,
+                    'Full-zip Hoodie': 4,
+                    'Gumshoes': 5,
+                    'Hoodie': 6,
+                    'Jacket': 7,
+                    'Leggings': 8,
+                    'Longsleeve': 9,
+                    'Pants': 10,
+                    'Parka': 11,
+                    'Polo': 12,
+                    'Puffer jacket': 13,
+                    'Sandals': 14,
+                    'Shirt': 15,
+                    'Shoes': 16,
+                    'Shorts': 17,
+                    'Skirt': 18,
+                    'Slippers': 19,
+                    'Sneakers': 20,
+                    'Sweater': 21,
+                    'Sweatshirt': 22,
+                    'T-shirt': 23,
+                    'Tank-top': 24,
+                    'Top': 25,
+                    'Vest': 26
+                }
+                self.inverse_class_dict = {v: k for k, v in self.class_dict.items()}
+            else:
+                self.class_dict = {'Dress': 0, 'Football Boots': 1, 'Football Sneakers': 2, 'Full-zip Hoodie': 3,
+                                   'Hoodie': 4, 'Jacket': 5, 'Leggings': 6, 'Longsleeve': 7, 'Pants': 8, 'Parka': 9,
+                                   'Polo': 10, 'Puffer jacket': 11, 'Shirt': 12, 'Shorts': 13, 'Skirt': 14, 'Slippers': 15,
+                                   'Sneakers': 16, 'Sweater': 17, 'Sweatshirt': 18, 'T-shirt': 19, 'Tank Top': 20,
+                                   'Top': 21, 'Track Jacket': 22, 'Vest': 23}
+                self.inverse_class_dict = {v: k for k, v in self.class_dict.items()}
+
+            self.model = TransferLearningClassifier(num_classes=len(self.class_dict))
             self.model.load_state_dict(torch.load(model_path, map_location=device))
             self.model.eval()
             self.processor = PhotoProcessing1(background_color='white')
@@ -284,7 +310,7 @@ class App:
             output = self.model(image_tensor)
             prediction = output.argmax(dim=1).item()
 
-        class_name = inverse_class_dict[prediction]
+        class_name = self.inverse_class_dict[prediction]
         self.output_text.insert(tk.END, f"Predicted class: {class_name}\n")
 
         image_np = np.array(processed_image)

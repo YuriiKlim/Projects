@@ -1,3 +1,4 @@
 # Auto detect text files and perform LF normalization
 * text=auto
 model_v0.2.pth filter=lfs diff=lfs merge=lfs -text
+model_90k_v0.1.pth filter=lfs diff=lfs merge=lfs -text
