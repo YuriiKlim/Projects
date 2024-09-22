@@ -41,12 +41,11 @@ def segment_clothing(img, clothes=["Hat", "Upper-clothes", "Skirt", "Pants", "Dr
 class TransferLearningClassifier(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
-        resnet = models.resnet152(pretrained=True)
-        for param in resnet.parameters():
+        vgg = models.vgg19(pretrained=True)
+        for param in vgg.parameters():
             param.requires_grad = False
-        in_features = resnet.fc.in_features
-        resnet.fc = nn.Identity()
-        self.feature_extractor = resnet
+        self.feature_extractor = vgg.features
+        in_features = 25088
         self.fc1 = nn.Linear(in_features, 512)
         self.dropout1 = nn.Dropout(0.5)
         self.fc2 = nn.Linear(512, 256)
@@ -54,14 +53,14 @@ class TransferLearningClassifier(nn.Module):
         self.fc3 = nn.Linear(256, num_classes)
 
     def forward(self, x):
-        out = self.feature_extractor(x)
-        out = F.relu(self.fc1(out))
-        out = self.dropout1(out)
-        out = F.relu(self.fc2(out))
-        out = self.dropout2(out)
-        out = self.fc3(out)
-        return out
-
+        x = self.feature_extractor(x)
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.fc1(x))
+        x = self.dropout1(x)
+        x = F.relu(self.fc2(x))
+        x = self.dropout2(x)
+        x = self.fc3(x)
+        return x
 
 class PhotoProcessing1:
     def __init__(self, yolo_model_path='yolov8n.pt', background_color='white', device='cpu'):
@@ -177,30 +176,37 @@ class App:
         self.processor = None
         self.image = None
 
+        # Initialize class_dict and inverse_class_dict
         self.class_dict = {'Dress': 0, 'Football Boots': 1, 'Football Sneakers': 2, 'Full-zip Hoodie': 3, 'Hoodie': 4,
                            'Jacket': 5, 'Leggings': 6, 'Longsleeve': 7, 'Pants': 8, 'Parka': 9, 'Polo': 10, 'Puffer jacket': 11,
                            'Shirt': 12, 'Shorts': 13, 'Skirt': 14, 'Slippers': 15, 'Sneakers': 16, 'Sweater': 17,
                            'Sweatshirt': 18, 'T-shirt': 19, 'Tank Top': 20, 'Top': 21, 'Track Jacket': 22, 'Vest': 23}
         self.inverse_class_dict = {v: k for k, v in self.class_dict.items()}
 
+        # Select Model Button
         self.model_button = tk.Button(root, text="Select Model", command=self.load_model)
         self.model_button.grid(row=0, column=0, padx=10, pady=10)
 
+        # Image URL Entry
         self.url_label = tk.Label(root, text="Image URL:")
         self.url_label.grid(row=1, column=0, padx=10, pady=5)
         self.url_entry = tk.Entry(root, width=110)
         self.url_entry.grid(row=1, column=1, padx=10, pady=5)
         self.url_entry.bind("<KeyRelease>", self.check_predict_ready)
 
+        # Select Image Button
         self.image_button = tk.Button(root, text="Select Image", command=self.load_image)
         self.image_button.grid(row=2, column=0, padx=10, pady=10)
 
+        # Predict Button
         self.predict_button = tk.Button(root, text="Predict", command=self.predict, state=tk.DISABLED)
         self.predict_button.grid(row=3, column=0, columnspan=3, padx=10, pady=10)
 
+        # Clear Image Button
         self.clear_button = tk.Button(root, text="Clear Image", command=self.clear_image)
         self.clear_button.grid(row=4, column=0, columnspan=3, padx=10, pady=10)
 
+        # Output Area
         self.output_text = tk.Text(root, height=7, width=97)
         self.output_text.grid(row=5, column=0, columnspan=3, padx=10, pady=10)
 
@@ -242,6 +248,7 @@ class App:
                 }
                 self.inverse_class_dict = {v: k for k, v in self.class_dict.items()}
             else:
+                # Keep the original class_dict
                 self.class_dict = {'Dress': 0, 'Football Boots': 1, 'Football Sneakers': 2, 'Full-zip Hoodie': 3,
                                    'Hoodie': 4, 'Jacket': 5, 'Leggings': 6, 'Longsleeve': 7, 'Pants': 8, 'Parka': 9,
                                    'Polo': 10, 'Puffer jacket': 11, 'Shirt': 12, 'Shorts': 13, 'Skirt': 14, 'Slippers': 15,
@@ -249,6 +256,7 @@ class App:
                                    'Top': 21, 'Track Jacket': 22, 'Vest': 23}
                 self.inverse_class_dict = {v: k for k, v in self.class_dict.items()}
 
+            # Initialize the model with the correct number of classes
             self.model = TransferLearningClassifier(num_classes=len(self.class_dict))
             self.model.load_state_dict(torch.load(model_path, map_location=device))
             self.model.eval()
